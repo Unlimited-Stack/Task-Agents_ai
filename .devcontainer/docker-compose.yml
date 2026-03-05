@@ -1,0 +1,11 @@
+version: "3.9"
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+    volumes:
+      - ..:/workspaces/vibecoding:cached
+    working_dir: /workspaces/vibecoding
+    command: sleep infinity
