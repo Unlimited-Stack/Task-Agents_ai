@@ -8,6 +8,15 @@ import { getTaskFilePath, listAllTasks, readTaskDocument, setTaskHidden, transit
 import type { TaskStatus } from "./util/schema";
 
 const TERMINAL_STATUSES: readonly TaskStatus[] = ["Closed", "Failed", "Timeout", "Cancelled"] as const;
+//程序运行总逻辑，可能还需要检查
+//runtime 是用户交互入口，是一个命令行 shell。它不直接处理任务状态机，而是把用户指令路由到 task_loop / dispatcher / listener。
+
+/*startTaskAgentRuntime()
+├── 非 TTY（CI/服务器）→ startListener() 仅开 HTTP 服务，return
+└── TTY（交互终端）→ startListener() + 进入命令循环 while(true)*/
+
+//同时现在主要是针对开发者的逻辑，输入命令提示符help,list,new等，来创建任务，查看任务状态，选择任务，执行任务步骤，结束或取消任务，以及挂起监听等功能。
+// 后续可以根据需要增加更多命令，比如直接查看某个任务的详细信息，或者批量操作等。
 
 /**
  * Runtime shell:
@@ -28,6 +37,7 @@ export async function startTaskAgentRuntime(): Promise<void> {
     await startListener();
     output.write("listener service: on\n");
     printHelp();
+    // eslint-disable-next-line no-constant-condition
     while (true) {
       const prompt = activeTaskId ? `\nruntime(${activeTaskId})> ` : "\nruntime> ";
       const line = (await rl.question(prompt)).trim();

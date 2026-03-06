@@ -22,7 +22,7 @@ import {
   transitionTaskStatus
 } from "./util/storage";
 
-
+//========================挂起listener后台模式，等待其他用户握手（逻辑后续确认，这个程序可以不看）========================
 let serverInstance: Server | null = null;
 
 /**

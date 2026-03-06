@@ -25,7 +25,12 @@ export interface VectorSearchQuery {
     targetVibe?: number;
     rawDescription?: number;
   };
-  /** Only search tasks in these statuses. Default: ["Searching"] */
+  /**
+   * If provided, only search within these task IDs (L0 pre-filtered whitelist).
+   * If omitted, falls back to status-based filtering from task_index.
+   */
+  candidateTaskIds?: string[];
+  /** Only search tasks in these statuses (used when candidateTaskIds is not set). Default: ["Searching"] */
   statusFilter?: string[];
 }
 
@@ -74,13 +79,19 @@ export function searchByVector(query: VectorSearchQuery): VectorSearchResult[] {
     rawDescription: query.weights?.rawDescription ?? DEFAULT_WEIGHTS.rawDescription
   };
 
-  const statusFilter = new Set(query.statusFilter ?? ["Searching"]);
-
-  // Step 1: Get candidate task_ids from global index
-  const allSnapshots = listTaskSnapshots();
-  const candidateIds = allSnapshots
-    .filter((s) => s.task_id !== query.sourceTaskId && statusFilter.has(s.status))
-    .map((s) => s.task_id);
+  // Step 1: Determine candidate task_ids
+  let candidateIds: string[];
+  if (query.candidateTaskIds && query.candidateTaskIds.length > 0) {
+    // Use L0 pre-filtered whitelist
+    candidateIds = query.candidateTaskIds.filter((id) => id !== query.sourceTaskId);
+  } else {
+    // Fallback: status-based filtering from global index
+    const statusFilter = new Set(query.statusFilter ?? ["Searching"]);
+    const allSnapshots = listTaskSnapshots();
+    candidateIds = allSnapshots
+      .filter((s) => s.task_id !== query.sourceTaskId && statusFilter.has(s.status))
+      .map((s) => s.task_id);
+  }
 
   if (candidateIds.length === 0) return [];
 
@@ -140,55 +151,3 @@ function computeFieldScore(queryVec: number[] | undefined, candidateRec: VectorR
   return cosineSimilarity(queryVec, candidateRec.vector);
 }
 
-// ---------------------------------------------------------------------------
-// Legacy interface (kept for backward compatibility)
-// ---------------------------------------------------------------------------
-
-export interface RetrievalQuery {
-  targetActivity: string;
-  targetVibe: string;
-  topK: number;
-}
-
-export interface RetrievalCandidate {
-  taskId: string;
-  targetActivity: string;
-  targetVibe: string;
-}
-
-export interface RetrievalResult {
-  taskId: string;
-  score: number;
-}
-
-/**
- * @deprecated Use searchByVector() for real embedding-based search.
- * Kept for fallback when embeddings are not yet generated.
- */
-export async function retrieveBySemanticSimilarity(
-  query: RetrievalQuery,
-  candidates: RetrievalCandidate[]
-): Promise<RetrievalResult[]> {
-  const queryTokens = tokenize(`${query.targetActivity} ${query.targetVibe}`);
-  const results = candidates.map((candidate) => {
-    const candidateTokens = tokenize(`${candidate.targetActivity} ${candidate.targetVibe}`);
-    const score = jaccardSimilarity(queryTokens, candidateTokens);
-    return { taskId: candidate.taskId, score };
-  });
-
-  return results.sort((a, b) => b.score - a.score).slice(0, query.topK);
-}
-
-function tokenize(text: string): Set<string> {
-  const normalized = text.toLowerCase().trim();
-  const parts = normalized.split(/[\s,.;:!?()[\]{}<>"'`~@#$%^&*+=_|\\/\\-]+/).filter((part) => part.length > 0);
-  return new Set(parts);
-}
-
-function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
-  if (a.size === 0 && b.size === 0) return 1;
-  const intersectionSize = [...a].filter((token) => b.has(token)).length;
-  const unionSize = new Set([...a, ...b]).size;
-  if (unionSize === 0) return 0;
-  return intersectionSize / unionSize;
-}
