@@ -109,7 +109,7 @@ export async function processSearchingTasks(): Promise<void> {
       continue;
     }
 
-    await transitionTaskStatus(task.frontmatter.task_id, "Negotiating", {
+    await transitionTaskStatus(task.frontmatter.task_id, "Waiting_Human", {
       expectedVersion: task.frontmatter.version
     });
   }
@@ -228,7 +228,7 @@ export async function processWaitingHumanTask(task: TaskDocument, rl?: Interface
     const summary = formatHandshakeSummary(task, snapshot);
     output.write(`\n===== Waiting_Human: 需要你确认握手结果 =====\n`);
     output.write(`${summary}\n`);
-    const answer = (await localRl.question("是否满意本次握手结果？输入 yes 进入聊天；输入 no 退回 Drafting："))
+    const answer = (await localRl.question("是否满意本次握手结果？yes 进入聊天 / no 退回 Drafting / q 退出："))
       .trim()
       .toLowerCase();
     if (answer === "yes" || answer === "y") {
@@ -240,6 +240,9 @@ export async function processWaitingHumanTask(task: TaskDocument, rl?: Interface
         expectedVersion: task.frontmatter.version
       });
       return true;
+    }
+    if (answer === "q" || answer === "quit" || answer === "exit" || answer === "退出") {
+      return false;
     }
     return false;
   } finally {
@@ -508,7 +511,7 @@ export async function executeL2Sandbox(task: TaskDocument, envelope: HandshakeIn
 async function sendInitialPropose(sourceTaskId: string, targetTaskId: string): Promise<boolean> {
   const sourceTask = await readTaskDocument(sourceTaskId);
   const now = new Date().toISOString();
-
+  
   const envelope: HandshakeInboundEnvelope = {
     protocol_version: "1.0",
     message_id: randomUUID(),

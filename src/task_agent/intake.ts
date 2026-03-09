@@ -98,8 +98,9 @@ export async function collectInitialTaskFromUser(): Promise<IntakeTaskResult | n
     while (!extracted.complete && extracted.followUpQuestion) {
       // LLM needs more info, ask a follow-up
       console.log(`\n${extracted.followUpQuestion}`);
-      const answer = (await rl.question("> ")).trim();
+      const answer = (await rl.question("（输入 q/quit 取消）> ")).trim();
       if (!answer) break;
+      if (isExitKeyword(answer)) return null;
 
       transcript.push(`助手: ${extracted.followUpQuestion}`);
       transcript.push(`用户: ${answer}`);
@@ -113,10 +114,12 @@ export async function collectInitialTaskFromUser(): Promise<IntakeTaskResult | n
     while (!confirmed) {
       printExtracted(extracted);
 
-      const choice = (await rl.question("\n输入 [go] 开始匹配，或者继续说你想补充的内容：\n> ")).trim();
+      const choice = (await rl.question("\n输入 [go] 开始匹配，[q/quit] 取消，或者继续说你想补充的内容：\n> ")).trim();
 
       if (!choice || choice.toLowerCase() === "go") {
         confirmed = true;
+      } else if (isExitKeyword(choice)) {
+        return null;
       } else {
         // User wants to refine
         transcript.push(`用户(补充): ${choice}`);
@@ -201,6 +204,11 @@ async function extractFromConversation(conversationContext: string): Promise<Ext
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+function isExitKeyword(text: string): boolean {
+  const t = text.trim().toLowerCase();
+  return t === "q" || t === "quit" || t === "exit" || t === "退出" || t === "取消";
+}
 
 function truncate(text: string, maxLen: number): string {
   if (!text) return "";
